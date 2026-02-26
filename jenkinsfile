@@ -1,0 +1,43 @@
+pipeline {
+    agent any
+    environment {
+        SERVER_IP = '172.31.29.80'
+        SSH_CREDENTIAL = 'login-id' 
+        REPO_URL = 'https://github.com/rohi-del/student-registration.git'
+        BRANCH = 'main'
+        REMOTE_USER = 'ubuntu'
+        REMOTE_PATH = '/var/www/html/student-registration'
+    }
+    stages {
+        stage('Clone Repository') {
+            steps {
+                
+                git branch: "${BRANCH}", url: "${REPO_URL}"
+            }
+        }
+        
+        stage('Deploy to Target Server') {
+            steps {
+               
+                sshagent([SSH_CREDENTIAL]) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${SERVER_IP} 'sudo mkdir -p ${REMOTE_PATH} && sudo chown -R ${REMOTE_USER}:${REMOTE_USER} ${REMOTE_PATH}'
+                        scp -o StrictHostKeyChecking=no -r * ${REMOTE_USER}@${SERVER_IP}:${REMOTE_PATH}
+                    """
+                }
+            }
+        }
+
+        stage('Restart apache') {
+            steps {
+                sshagent([SSH_CREDENTIAL]) {
+                    sh "ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${SERVER_IP} 'sudo systemctl restart apache2'"
+                }
+            }
+        }
+    }
+    post {
+        success { echo 'Deployment Successful ✅' }
+        failure { echo 'Deployment Failed ❌' }
+    }
+}
